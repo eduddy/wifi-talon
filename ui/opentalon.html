@@ -1,1094 +1,922 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpenTalon — Cybernetic Precision</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OPENTALON — Cybernetic Precision</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      background: #000;
-      color: #00f0ff;
-      font-family: 'Courier New', monospace;
-      overflow: hidden;
-      height: 100vh;
-      width: 100vw;
-    }
+  :root {
+    --red: #ff4060;
+    --blue: #0af;
+    --teal: #00ffcc;
+    --dark: #000208;
+    --amber: #ffb347;
+  }
 
-    #canvas-container {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-    }
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--dark);
+    color: #c8d8e8;
+    font-family: 'Courier New', Courier, monospace;
+    overflow: hidden;
+    cursor: none;
+  }
 
-    canvas { display: block; }
+  /* ── Custom cursor ── */
+  #cursor {
+    position: fixed; top: 0; left: 0; width: 20px; height: 20px;
+    pointer-events: none; z-index: 9999; transform: translate(-50%, -50%);
+  }
+  #cursor::before, #cursor::after {
+    content: '';
+    position: absolute;
+    background: var(--teal);
+  }
+  #cursor::before {
+    width: 2px; height: 20px;
+    top: 0; left: 9px;
+  }
+  #cursor::after {
+    width: 20px; height: 2px;
+    top: 9px; left: 0;
+  }
+  #cursor-ring {
+    position: fixed; top: 0; left: 0;
+    width: 36px; height: 36px;
+    border: 1px solid rgba(0,170,255,0.5);
+    border-radius: 50%;
+    pointer-events: none; z-index: 9998;
+    transform: translate(-50%, -50%);
+    transition: transform 0.12s ease, opacity 0.2s;
+  }
 
-    /* Scanline overlay */
-    #scanlines {
-      position: fixed;
-      inset: 0;
-      z-index: 1;
-      pointer-events: none;
-      background: repeating-linear-gradient(
-        to bottom,
-        transparent 0px,
-        transparent 2px,
-        rgba(0, 240, 255, 0.015) 2px,
-        rgba(0, 240, 255, 0.015) 4px
-      );
-    }
+  /* ── Reticle SVG ── */
+  #reticle {
+    position: fixed; pointer-events: none; z-index: 9997;
+    width: 80px; height: 80px;
+    transform: translate(-50%, -50%);
+    transition: transform 0.08s ease;
+    opacity: 0.55;
+  }
 
-    /* Vignette */
-    #vignette {
-      position: fixed;
-      inset: 0;
-      z-index: 2;
-      pointer-events: none;
-      background: radial-gradient(ellipse at center,
-        transparent 40%,
-        rgba(0, 0, 0, 0.6) 100%
-      );
-    }
+  /* ── Loading screen ── */
+  #loading {
+    position: fixed; inset: 0; z-index: 9990;
+    background: #000208;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px;
+    transition: opacity 0.8s ease;
+  }
+  #loading.out { opacity: 0; pointer-events: none; }
+  .load-logo {
+    font-size: 2.2rem; letter-spacing: 0.22em;
+    font-weight: 700; color: #eee;
+  }
+  .load-logo span { color: var(--red); }
+  .load-bar-wrap {
+    width: 260px; height: 2px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+  }
+  .load-bar {
+    height: 100%; width: 0;
+    background: linear-gradient(90deg, var(--teal), var(--blue));
+    animation: loadfill 1.8s ease forwards;
+  }
+  @keyframes loadfill {
+    0% { width: 0; }
+    60% { width: 75%; }
+    100% { width: 100%; }
+  }
+  .load-text {
+    font-size: 0.65rem; letter-spacing: 0.25em;
+    color: rgba(200,216,232,0.5);
+    animation: loadblink 0.6s steps(1) infinite;
+  }
+  @keyframes loadblink { 50% { opacity: 0; } }
 
-    /* HUD top bar */
-    #hud-top {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 10;
-      padding: 16px 32px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid rgba(0, 240, 255, 0.2);
-      background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
-    }
+  /* ── Canvas ── */
+  #c {
+    position: fixed; inset: 0; z-index: 1;
+    display: block;
+  }
 
-    #hud-top .logo {
-      font-size: 1.1rem;
-      font-weight: bold;
-      letter-spacing: 0.3em;
-      color: #00f0ff;
-      text-shadow: 0 0 20px #00f0ff, 0 0 40px #00f0ff;
-    }
+  /* ── Scanlines ── */
+  #scanlines {
+    position: fixed; inset: 0; z-index: 5;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.12) 2px,
+      rgba(0,0,0,0.12) 4px
+    );
+  }
 
-    #hud-top .nav-links {
-      display: flex;
-      gap: 32px;
-      list-style: none;
-    }
+  /* ── Vignette ── */
+  #vignette {
+    position: fixed; inset: 0; z-index: 6;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center,
+      transparent 40%,
+      rgba(0,0,8,0.65) 100%
+    );
+  }
 
-    #hud-top .nav-links a {
-      color: rgba(0, 240, 255, 0.7);
-      text-decoration: none;
-      font-size: 0.75rem;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      transition: color 0.2s, text-shadow 0.2s;
-    }
+  /* ── Top bar ── */
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+    height: 56px;
+    display: flex; align-items: center; padding: 0 32px;
+    border-bottom: 1px solid rgba(0,170,255,0.12);
+    background: linear-gradient(180deg, rgba(0,2,8,0.88) 0%, transparent 100%);
+    pointer-events: none;
+  }
+  .logo {
+    font-size: 1.25rem; font-weight: 700; letter-spacing: 0.18em;
+    color: #e8eef4;
+  }
+  .logo span { color: var(--red); }
 
-    #hud-top .nav-links a:hover {
-      color: #00f0ff;
-      text-shadow: 0 0 10px #00f0ff;
-    }
+  /* ── Corner brackets ── */
+  .corner {
+    position: fixed; z-index: 20; width: 60px; height: 60px;
+    pointer-events: none;
+  }
+  .corner::before, .corner::after {
+    content: ''; position: absolute;
+    background: var(--blue);
+  }
+  .corner::before { width: 60px; height: 2px; }
+  .corner::after  { width: 2px; height: 60px; }
 
-    #hud-top .status {
-      font-size: 0.65rem;
-      letter-spacing: 0.15em;
-      color: rgba(0, 240, 255, 0.5);
-    }
+  .corner-tl { top: 64px; left: 20px; }
+  .corner-tl::before { top: 0; left: 0; }
+  .corner-tl::after  { top: 0; left: 0; }
 
-    /* Corner HUD brackets */
-    .hud-corner {
-      position: fixed;
-      z-index: 10;
-      width: 60px;
-      height: 60px;
-      pointer-events: none;
-    }
+  .corner-tr { top: 64px; right: 20px; }
+  .corner-tr::before { top: 0; right: 0; left: auto; }
+  .corner-tr::after  { top: 0; right: 0; left: auto; }
 
-    .hud-corner.tl { top: 70px; left: 20px; border-top: 1px solid #00f0ff; border-left: 1px solid #00f0ff; }
-    .hud-corner.tr { top: 70px; right: 20px; border-top: 1px solid #00f0ff; border-right: 1px solid #00f0ff; }
-    .hud-corner.bl { bottom: 20px; left: 20px; border-bottom: 1px solid #00f0ff; border-left: 1px solid #00f0ff; }
-    .hud-corner.br { bottom: 20px; right: 20px; border-bottom: 1px solid #00f0ff; border-right: 1px solid #00f0ff; }
+  .corner-bl { bottom: 20px; left: 20px; }
+  .corner-bl::before { bottom: 0; top: auto; left: 0; }
+  .corner-bl::after  { bottom: 0; top: auto; left: 0; }
 
-    /* Side HUD panels */
-    #hud-left {
-      position: fixed;
-      left: 32px;
-      top: 50%;
-      transform: translateY(-50%);
-      z-index: 10;
-      pointer-events: none;
-    }
+  .corner-br { bottom: 20px; right: 20px; }
+  .corner-br::before { bottom: 0; top: auto; right: 0; left: auto; }
+  .corner-br::after  { bottom: 0; top: auto; right: 0; left: auto; }
 
-    #hud-right {
-      position: fixed;
-      right: 32px;
-      top: 50%;
-      transform: translateY(-50%);
-      z-index: 10;
-      text-align: right;
-      pointer-events: none;
-    }
+  /* ── HUD panels ── */
+  .hud {
+    position: fixed; z-index: 20; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 16px;
+    pointer-events: none;
+  }
+  .hud-left  { left: 24px; align-items: flex-start; }
+  .hud-right { right: 24px; align-items: flex-end; }
 
-    .hud-stat {
-      margin: 12px 0;
-      font-size: 0.6rem;
-      letter-spacing: 0.15em;
-      color: rgba(0, 240, 255, 0.5);
-      line-height: 1.6;
-    }
+  .hud-item {
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .hud-label {
+    font-size: 0.58rem; letter-spacing: 0.22em;
+    color: rgba(0,170,255,0.6);
+    text-transform: uppercase;
+  }
+  .hud-value {
+    font-size: 0.78rem; letter-spacing: 0.1em;
+    color: var(--teal);
+    font-weight: 700;
+  }
+  .hud-bar {
+    width: 80px; height: 2px;
+    background: rgba(0,170,255,0.15);
+    position: relative; overflow: hidden;
+  }
+  .hud-bar-fill {
+    position: absolute; left: 0; top: 0; height: 100%;
+    background: linear-gradient(90deg, var(--teal), var(--blue));
+    animation: hudpulse 2.5s ease-in-out infinite alternate;
+  }
+  @keyframes hudpulse {
+    from { opacity: 0.6; }
+    to   { opacity: 1; }
+  }
+  .hud-right .hud-bar { margin-left: auto; }
+  .hud-right .hud-bar-fill { left: auto; right: 0; }
 
-    .hud-stat .label { color: rgba(0, 240, 255, 0.3); }
-    .hud-stat .value { color: rgba(0, 240, 255, 0.8); font-weight: bold; }
+  /* ── Hero text ── */
+  #hero {
+    position: fixed; z-index: 20;
+    bottom: 120px; left: 50%; transform: translateX(-50%);
+    text-align: center; pointer-events: none;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    white-space: nowrap;
+  }
+  .hero-title {
+    font-size: clamp(2.8rem, 7vw, 5.5rem);
+    font-weight: 900; letter-spacing: 0.22em;
+    color: #e8eef4;
+    line-height: 1;
+    position: relative;
+  }
+  .hero-title span { color: var(--red); }
+  .hero-title::before, .hero-title::after {
+    content: attr(data-text);
+    position: absolute; inset: 0;
+    opacity: 0;
+    white-space: nowrap;
+  }
+  .hero-title.glitch::before {
+    color: var(--red);
+    clip-path: polygon(0 20%, 100% 20%, 100% 40%, 0 40%);
+    transform: translateX(-3px);
+    opacity: 0.7;
+  }
+  .hero-title.glitch::after {
+    color: var(--blue);
+    clip-path: polygon(0 60%, 100% 60%, 100% 80%, 0 80%);
+    transform: translateX(3px);
+    opacity: 0.7;
+  }
+  .hero-tagline {
+    font-size: clamp(0.6rem, 1.4vw, 0.8rem);
+    letter-spacing: 0.32em; color: rgba(200,216,232,0.55);
+    text-transform: uppercase;
+  }
 
-    .hud-bar {
-      width: 120px;
-      height: 2px;
-      background: rgba(0, 240, 255, 0.15);
-      margin: 4px 0;
-      position: relative;
-      overflow: hidden;
-    }
+  /* ── CTA ── */
+  #cta-wrap {
+    position: fixed; z-index: 21;
+    bottom: 56px; left: 50%; transform: translateX(-50%);
+  }
+  .cta-btn {
+    display: inline-block;
+    padding: 14px 40px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem; font-weight: 700;
+    letter-spacing: 0.25em; text-transform: uppercase;
+    color: #000;
+    background: linear-gradient(135deg, var(--teal) 0%, var(--blue) 100%);
+    border: none; cursor: none;
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+    transition: filter 0.2s, transform 0.15s;
+  }
+  .cta-btn:hover {
+    filter: brightness(1.2) drop-shadow(0 0 12px var(--teal));
+    transform: translateY(-2px);
+  }
+  .cta-btn:active { transform: translateY(0); }
 
-    .hud-bar-fill {
-      position: absolute;
-      top: 0; left: 0; bottom: 0;
-      background: #00f0ff;
-      box-shadow: 0 0 6px #00f0ff;
-      animation: bar-pulse 3s ease-in-out infinite;
-    }
-
-    @keyframes bar-pulse {
-      0%, 100% { opacity: 0.7; }
-      50% { opacity: 1; }
-    }
-
-    /* Center hero text */
-    #hero {
-      position: fixed;
-      bottom: 100px;
-      left: 0;
-      right: 0;
-      z-index: 10;
-      text-align: center;
-      pointer-events: none;
-    }
-
-    #hero .domain {
-      font-size: clamp(2.5rem, 6vw, 5rem);
-      font-weight: 900;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      color: #fff;
-      text-shadow:
-        0 0 20px #00f0ff,
-        0 0 60px #00f0ff,
-        0 0 120px rgba(0,240,255,0.4);
-      animation: glow-pulse 4s ease-in-out infinite;
-    }
-
-    #hero .tagline {
-      margin-top: 8px;
-      font-size: clamp(0.6rem, 1.5vw, 0.9rem);
-      letter-spacing: 0.5em;
-      color: rgba(0, 240, 255, 0.6);
-      text-transform: uppercase;
-    }
-
-    @keyframes glow-pulse {
-      0%, 100% { text-shadow: 0 0 20px #00f0ff, 0 0 60px #00f0ff, 0 0 120px rgba(0,240,255,0.4); }
-      50% { text-shadow: 0 0 30px #00f0ff, 0 0 80px #00f0ff, 0 0 160px rgba(0,240,255,0.6), 0 0 200px rgba(0,240,255,0.2); }
-    }
-
-    /* Target reticle */
-    #reticle {
-      position: fixed;
-      z-index: 9;
-      pointer-events: none;
-      width: 80px;
-      height: 80px;
-      transform: translate(-50%, -50%);
-      opacity: 0;
-      transition: opacity 0.3s;
-    }
-
-    #reticle svg { width: 100%; height: 100%; }
-
-    /* CTA button */
-    #cta {
-      position: fixed;
-      bottom: 48px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10;
-    }
-
-    #cta button {
-      background: transparent;
-      border: 1px solid #00f0ff;
-      color: #00f0ff;
-      font-family: 'Courier New', monospace;
-      font-size: 0.7rem;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      padding: 12px 36px;
-      cursor: pointer;
-      position: relative;
-      overflow: hidden;
-      transition: all 0.3s;
-      box-shadow: 0 0 20px rgba(0,240,255,0.2), inset 0 0 20px rgba(0,240,255,0.05);
-    }
-
-    #cta button::before {
-      content: '';
-      position: absolute;
-      top: 0; left: -100%; width: 100%; height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(0,240,255,0.15), transparent);
-      transition: left 0.5s;
-    }
-
-    #cta button:hover::before { left: 100%; }
-
-    #cta button:hover {
-      background: rgba(0,240,255,0.08);
-      box-shadow: 0 0 40px rgba(0,240,255,0.4), inset 0 0 20px rgba(0,240,255,0.1);
-    }
-
-    /* Crosshair cursor */
-    body { cursor: none; }
-
-    #cursor {
-      position: fixed;
-      width: 20px;
-      height: 20px;
-      pointer-events: none;
-      z-index: 999;
-      transform: translate(-50%, -50%);
-    }
-
-    #cursor::before, #cursor::after {
-      content: '';
-      position: absolute;
-      background: #00f0ff;
-      box-shadow: 0 0 4px #00f0ff;
-    }
-
-    #cursor::before {
-      width: 1px; height: 20px;
-      left: 50%; top: 0;
-      transform: translateX(-50%);
-    }
-
-    #cursor::after {
-      width: 20px; height: 1px;
-      top: 50%; left: 0;
-      transform: translateY(-50%);
-    }
-
-    /* Data stream ticker */
-    #ticker {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      z-index: 10;
-      padding: 6px 32px;
-      border-top: 1px solid rgba(0, 240, 255, 0.15);
-      background: rgba(0, 0, 0, 0.6);
-      font-size: 0.55rem;
-      letter-spacing: 0.15em;
-      color: rgba(0, 240, 255, 0.4);
-      overflow: hidden;
-      white-space: nowrap;
-    }
-
-    #ticker-content {
-      display: inline-block;
-      animation: ticker-scroll 30s linear infinite;
-    }
-
-    @keyframes ticker-scroll {
-      0% { transform: translateX(100vw); }
-      100% { transform: translateX(-100%); }
-    }
-
-    /* Loading overlay */
-    #loading {
-      position: fixed;
-      inset: 0;
-      z-index: 100;
-      background: #000;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      transition: opacity 1s ease 0.5s;
-    }
-
-    #loading .load-text {
-      font-size: 0.7rem;
-      letter-spacing: 0.4em;
-      color: rgba(0, 240, 255, 0.7);
-      margin-bottom: 24px;
-      animation: blink 1s step-end infinite;
-    }
-
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-
-    #loading .load-bar-wrap {
-      width: 200px;
-      height: 1px;
-      background: rgba(0, 240, 255, 0.2);
-    }
-
-    #loading .load-bar {
-      height: 100%;
-      background: #00f0ff;
-      box-shadow: 0 0 8px #00f0ff;
-      width: 0;
-      transition: width 2s ease;
-    }
-
-    .fade-out { opacity: 0; pointer-events: none; }
-  </style>
+  /* ── Ticker ── */
+  #ticker {
+    position: fixed; z-index: 20;
+    bottom: 0; left: 0; right: 0;
+    height: 30px;
+    display: flex; align-items: center;
+    border-top: 1px solid rgba(0,170,255,0.15);
+    background: rgba(0,2,8,0.75);
+    overflow: hidden; pointer-events: none;
+  }
+  .ticker-tag {
+    flex-shrink: 0;
+    padding: 0 14px;
+    font-size: 0.6rem; letter-spacing: 0.2em;
+    color: var(--red); border-right: 1px solid rgba(255,64,96,0.3);
+    white-space: nowrap;
+  }
+  .ticker-scroll {
+    flex: 1; overflow: hidden; position: relative;
+  }
+  .ticker-inner {
+    display: flex; white-space: nowrap;
+    animation: tickerMove 28s linear infinite;
+    font-size: 0.6rem; letter-spacing: 0.18em;
+    color: rgba(200,216,232,0.45);
+  }
+  .ticker-inner span { padding: 0 32px; }
+  @keyframes tickerMove {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+</style>
 </head>
 <body>
 
-<!-- Loading screen -->
+<!-- Loading -->
 <div id="loading">
-  <div class="load-text">INITIALIZING OPENTALON SYSTEMS</div>
-  <div class="load-bar-wrap"><div class="load-bar" id="load-bar"></div></div>
+  <div class="load-logo">OPEN<span>TALON</span></div>
+  <div class="load-bar-wrap"><div class="load-bar"></div></div>
+  <div class="load-text">INITIALIZING CYBERNETIC SYSTEMS...</div>
 </div>
 
-<!-- Custom cursor -->
+<!-- Cursor -->
 <div id="cursor"></div>
+<div id="cursor-ring"></div>
+<svg id="reticle" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="40" cy="40" r="28" stroke="#00ffcc" stroke-width="0.8" stroke-dasharray="6 3"/>
+  <line x1="40" y1="8"  x2="40" y2="20" stroke="#0af" stroke-width="1.2"/>
+  <line x1="40" y1="60" x2="40" y2="72" stroke="#0af" stroke-width="1.2"/>
+  <line x1="8"  y1="40" x2="20" y2="40" stroke="#0af" stroke-width="1.2"/>
+  <line x1="60" y1="40" x2="72" y2="40" stroke="#0af" stroke-width="1.2"/>
+  <circle cx="40" cy="40" r="3" fill="#ff4060"/>
+</svg>
 
-<!-- 3D canvas -->
-<div id="canvas-container"></div>
+<!-- Canvas -->
+<canvas id="c"></canvas>
 
 <!-- Overlays -->
 <div id="scanlines"></div>
 <div id="vignette"></div>
 
-<!-- HUD corners -->
-<div class="hud-corner tl"></div>
-<div class="hud-corner tr"></div>
-<div class="hud-corner bl"></div>
-<div class="hud-corner br"></div>
-
-<!-- Top HUD bar -->
-<div id="hud-top">
-  <div class="logo">OPEN<span style="color:#ff4060">TALON</span></div>
-  <ul class="nav-links">
-    <li><a href="#">Platform</a></li>
-    <li><a href="#">Technology</a></li>
-    <li><a href="#">Capabilities</a></li>
-    <li><a href="#">Contact</a></li>
-  </ul>
-  <div class="status" id="hud-status">SYS:ONLINE &nbsp;|&nbsp; LOCK:ACQUIRED</div>
+<!-- Top bar -->
+<div id="topbar">
+  <div class="logo">OPEN<span>TALON</span></div>
 </div>
 
+<!-- Corner brackets -->
+<div class="corner corner-tl"></div>
+<div class="corner corner-tr"></div>
+<div class="corner corner-bl"></div>
+<div class="corner corner-br"></div>
+
 <!-- Left HUD -->
-<div id="hud-left">
-  <div class="hud-stat">
-    <div class="label">THRUST</div>
-    <div class="value" id="stat-thrust">9,842 m/s</div>
-    <div class="hud-bar"><div class="hud-bar-fill" style="width:94%"></div></div>
+<div class="hud hud-left">
+  <div class="hud-item">
+    <div class="hud-label">GRIP</div>
+    <div class="hud-value" id="hv-grip">94.7%</div>
+    <div class="hud-bar"><div class="hud-bar-fill" style="width:94.7%"></div></div>
   </div>
-  <div class="hud-stat">
-    <div class="label">ALTITUDE</div>
-    <div class="value" id="stat-alt">31,250 m</div>
+  <div class="hud-item">
+    <div class="hud-label">TORQUE</div>
+    <div class="hud-value" id="hv-torque">312 N&#183;m</div>
     <div class="hud-bar"><div class="hud-bar-fill" style="width:78%"></div></div>
   </div>
-  <div class="hud-stat">
-    <div class="label">TALON SPREAD</div>
-    <div class="value">OPEN — 180°</div>
+  <div class="hud-item">
+    <div class="hud-label">LOCK</div>
+    <div class="hud-value" id="hv-lock">ENGAGED</div>
     <div class="hud-bar"><div class="hud-bar-fill" style="width:100%"></div></div>
   </div>
-  <div class="hud-stat">
-    <div class="label">SIGNAL LOCK</div>
-    <div class="value" style="color:#00ff88">ACQUIRED</div>
-    <div class="hud-bar"><div class="hud-bar-fill" style="width:100%;background:#00ff88;box-shadow:0 0 6px #00ff88"></div></div>
+  <div class="hud-item">
+    <div class="hud-label">DIVE</div>
+    <div class="hud-value" id="hv-dive">386 km/h</div>
+    <div class="hud-bar"><div class="hud-bar-fill" style="width:86%"></div></div>
   </div>
 </div>
 
 <!-- Right HUD -->
-<div id="hud-right">
-  <div class="hud-stat">
-    <div class="label">PRECISION</div>
-    <div class="value">±0.002 mm</div>
-    <div class="hud-bar" style="margin-left:auto"><div class="hud-bar-fill" style="width:99%"></div></div>
+<div class="hud hud-right">
+  <div class="hud-item" style="align-items:flex-end">
+    <div class="hud-label">PRECISION</div>
+    <div class="hud-value" id="hv-prec">&#177;0.002 mm</div>
+    <div class="hud-bar"><div class="hud-bar-fill" style="width:99%"></div></div>
   </div>
-  <div class="hud-stat">
-    <div class="label">NEURAL SYNC</div>
-    <div class="value" id="stat-neural">98.7%</div>
-    <div class="hud-bar" style="margin-left:auto"><div class="hud-bar-fill" style="width:99%"></div></div>
+  <div class="hud-item" style="align-items:flex-end">
+    <div class="hud-label">NEURAL SYNC</div>
+    <div class="hud-value" id="hv-neural">98.1%</div>
+    <div class="hud-bar"><div class="hud-bar-fill" style="width:98.1%"></div></div>
   </div>
-  <div class="hud-stat">
-    <div class="label">SUBSYSTEMS</div>
-    <div class="value">12 / 12 ONLINE</div>
-    <div class="hud-bar" style="margin-left:auto"><div class="hud-bar-fill" style="width:100%;background:#00ff88;box-shadow:0 0 6px #00ff88"></div></div>
+  <div class="hud-item" style="align-items:flex-end">
+    <div class="hud-label">TARGET</div>
+    <div class="hud-value" id="hv-target">ACQUIRED</div>
+    <div class="hud-bar"><div class="hud-bar-fill" style="width:100%"></div></div>
   </div>
-  <div class="hud-stat">
-    <div class="label">TARGET</div>
-    <div class="value" style="color:#ff4060">LOCKED</div>
-    <div class="hud-bar" style="margin-left:auto"><div class="hud-bar-fill" style="width:100%;background:#ff4060;box-shadow:0 0 6px #ff4060"></div></div>
+  <div class="hud-item" style="align-items:flex-end">
+    <div class="hud-label">STATUS</div>
+    <div class="hud-value" id="hv-status">ONLINE</div>
+    <div class="hud-bar"><div class="hud-bar-fill" style="width:100%"></div></div>
   </div>
 </div>
 
-<!-- Hero text -->
+<!-- Hero -->
 <div id="hero">
-  <div class="domain">OPEN<span style="color:#ff4060">TALON</span>.COM</div>
-  <div class="tagline">Cybernetic Precision &nbsp;&bull;&nbsp; Apex Technology &nbsp;&bull;&nbsp; Total Dominance</div>
+  <div class="hero-title" data-text="OPENTALON">OPEN<span>TALON</span></div>
+  <div class="hero-tagline">CYBERNETIC PRECISION &middot; APEX TECHNOLOGY</div>
 </div>
 
 <!-- CTA -->
-<div id="cta">
-  <button onclick="void(0)">DEPLOY SYSTEM &nbsp;&#8250;</button>
-</div>
-
-<!-- Target reticle (follows mouse) -->
-<div id="reticle">
-  <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="40" cy="40" r="30" stroke="#ff4060" stroke-width="0.5" stroke-dasharray="4 4" opacity="0.6"/>
-    <circle cx="40" cy="40" r="20" stroke="#00f0ff" stroke-width="0.5" opacity="0.8"/>
-    <line x1="40" y1="10" x2="40" y2="20" stroke="#00f0ff" stroke-width="1"/>
-    <line x1="40" y1="60" x2="40" y2="70" stroke="#00f0ff" stroke-width="1"/>
-    <line x1="10" y1="40" x2="20" y2="40" stroke="#00f0ff" stroke-width="1"/>
-    <line x1="60" y1="40" x2="70" y2="40" stroke="#00f0ff" stroke-width="1"/>
-    <circle cx="40" cy="40" r="2" fill="#ff4060"/>
-  </svg>
+<div id="cta-wrap">
+  <button class="cta-btn">DEPLOY SYSTEM &#8250;</button>
 </div>
 
 <!-- Ticker -->
 <div id="ticker">
-  <span id="ticker-content">
-    OPENTALON CYBERNETICS &nbsp;///&nbsp; TALON LOCK SYSTEM ONLINE &nbsp;///&nbsp; NEURAL MESH ACTIVE: 12 NODES &nbsp;///&nbsp; SIGNAL PRECISION: 0.002mm &nbsp;///&nbsp; APEX PREDATOR PROTOCOL ENGAGED &nbsp;///&nbsp; SUBSYSTEMS NOMINAL &nbsp;///&nbsp; TELEMETRY STREAM: ACTIVE &nbsp;///&nbsp; DIVE VECTOR CALCULATED &nbsp;///&nbsp; PREY ACQUIRED AT 9.2km &nbsp;///&nbsp; IMPACT FORCE: 41,000 PSI &nbsp;///&nbsp; OPENTALON.COM — CYBERNETIC SUPREMACY &nbsp;///&nbsp;
-  </span>
+  <div class="ticker-tag">// DATASTREAM</div>
+  <div class="ticker-scroll">
+    <div class="ticker-inner">
+      <span>GRIP FORCE: 94.7% &#183;&#183;&#183;</span>
+      <span>KERATIN DENSITY: 98.3 GPa &#183;&#183;&#183;</span>
+      <span>CLAW CURVATURE: 127&#176; &#183;&#183;&#183;</span>
+      <span>NEURAL LATENCY: 0.4 ms &#183;&#183;&#183;</span>
+      <span>TALON LOCK: ENGAGED &#183;&#183;&#183;</span>
+      <span>APEX PREDATOR MODE: ACTIVE &#183;&#183;&#183;</span>
+      <span>BIOMECH SYNC: 98.1% &#183;&#183;&#183;</span>
+      <span>DIVE VELOCITY: 386 km/h &#183;&#183;&#183;</span>
+      <span>PHALANGE ACTUATORS: NOMINAL &#183;&#183;&#183;</span>
+      <span>PREY DETECTION: POSITIVE &#183;&#183;&#183;</span>
+      <span>TARSUS INTEGRITY: 100% &#183;&#183;&#183;</span>
+      <span>HALLUX TORQUE: 312 N&#183;m &#183;&#183;&#183;</span>
+      <!-- duplicate for seamless loop -->
+      <span>GRIP FORCE: 94.7% &#183;&#183;&#183;</span>
+      <span>KERATIN DENSITY: 98.3 GPa &#183;&#183;&#183;</span>
+      <span>CLAW CURVATURE: 127&#176; &#183;&#183;&#183;</span>
+      <span>NEURAL LATENCY: 0.4 ms &#183;&#183;&#183;</span>
+      <span>TALON LOCK: ENGAGED &#183;&#183;&#183;</span>
+      <span>APEX PREDATOR MODE: ACTIVE &#183;&#183;&#183;</span>
+      <span>BIOMECH SYNC: 98.1% &#183;&#183;&#183;</span>
+      <span>DIVE VELOCITY: 386 km/h &#183;&#183;&#183;</span>
+      <span>PHALANGE ACTUATORS: NOMINAL &#183;&#183;&#183;</span>
+      <span>PREY DETECTION: POSITIVE &#183;&#183;&#183;</span>
+      <span>TARSUS INTEGRITY: 100% &#183;&#183;&#183;</span>
+      <span>HALLUX TORQUE: 312 N&#183;m &#183;&#183;&#183;</span>
+    </div>
+  </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script>
-(function() {
-  'use strict';
-
-  // ─── Loading sequence ─────────────────────────────────────────────────────
-  const loadEl = document.getElementById('loading');
-  const loadBar = document.getElementById('load-bar');
-  setTimeout(() => { loadBar.style.width = '100%'; }, 100);
-  setTimeout(() => { loadEl.classList.add('fade-out'); }, 2000);
-  setTimeout(() => { loadEl.style.display = 'none'; }, 3100);
-
-  // ─── Custom cursor ────────────────────────────────────────────────────────
-  const cursor = document.getElementById('cursor');
-  const reticle = document.getElementById('reticle');
-  let mx = window.innerWidth / 2, my = window.innerHeight / 2;
-
-  document.addEventListener('mousemove', (e) => {
-    mx = e.clientX; my = e.clientY;
-    cursor.style.left = mx + 'px';
-    cursor.style.top = my + 'px';
-    reticle.style.left = mx + 'px';
-    reticle.style.top = my + 'px';
-    reticle.style.opacity = '0.8';
-  });
-
-  // ─── Three.js scene ───────────────────────────────────────────────────────
-  const container = document.getElementById('canvas-container');
-  const W = window.innerWidth, H = window.innerHeight;
-
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-  renderer.setSize(W, H);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
-  container.appendChild(renderer.domElement);
-
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000308);
-  scene.fog = new THREE.FogExp2(0x000308, 0.018);
-
-  const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 500);
-  camera.position.set(0, 1.5, 9);
-  camera.lookAt(0, 0, 0);
-
-  // ─── Lighting ─────────────────────────────────────────────────────────────
-  scene.add(new THREE.AmbientLight(0x001122, 0.8));
-
-  const mainLight = new THREE.DirectionalLight(0x00f0ff, 2.5);
-  mainLight.position.set(3, 8, 5);
-  mainLight.castShadow = true;
-  scene.add(mainLight);
-
-  const rimLight = new THREE.DirectionalLight(0xff4060, 1.5);
-  rimLight.position.set(-5, 2, -3);
-  scene.add(rimLight);
-
-  const underLight = new THREE.PointLight(0x00f0ff, 1.5, 15);
-  underLight.position.set(0, -3, 2);
-  scene.add(underLight);
-
-  const topLight = new THREE.PointLight(0xffffff, 0.8, 20);
-  topLight.position.set(0, 10, 0);
-  scene.add(topLight);
-
-  // ─── Materials ────────────────────────────────────────────────────────────
-  const cyberMat = new THREE.MeshStandardMaterial({
-    color: 0x0a0a14,
-    metalness: 0.95,
-    roughness: 0.15,
-    envMapIntensity: 1.5,
-  });
-
-  const accentMat = new THREE.MeshStandardMaterial({
-    color: 0x00f0ff,
-    metalness: 0.7,
-    roughness: 0.05,
-    emissive: 0x00f0ff,
-    emissiveIntensity: 0.6,
-  });
-
-  const glowMat = new THREE.MeshStandardMaterial({
-    color: 0x00f0ff,
-    emissive: 0x00f0ff,
-    emissiveIntensity: 3.0,
-    metalness: 0,
-    roughness: 1,
-  });
-
-  const redGlowMat = new THREE.MeshStandardMaterial({
-    color: 0xff2040,
-    emissive: 0xff2040,
-    emissiveIntensity: 3.0,
-    metalness: 0,
-    roughness: 1,
-  });
-
-  const featherMat = new THREE.MeshStandardMaterial({
-    color: 0x0d0d1a,
-    metalness: 0.9,
-    roughness: 0.2,
-    side: THREE.DoubleSide,
-  });
-
-  // ─── Eagle group ──────────────────────────────────────────────────────────
-  const eagle = new THREE.Group();
-  scene.add(eagle);
-
-  // Helper: add to group
-  function mesh(geo, mat, group) {
-    const m = new THREE.Mesh(geo, mat);
-    m.castShadow = true;
-    m.receiveShadow = false;
-    (group || eagle).add(m);
-    return m;
+<!-- Three.js importmap -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
   }
+}
+</script>
 
-  // ── Body ──────────────────────────────────────────────────────────────────
-  const bodyGeo = new THREE.CapsuleGeometry(0.38, 1.1, 12, 24);
-  const body = mesh(bodyGeo, cyberMat);
-  body.rotation.x = 0.55; // diving angle
-  body.position.set(0, 0.2, 0);
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }     from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass }     from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass }     from 'three/addons/postprocessing/OutputPass.js';
 
-  // Chest plate
-  const chestGeo = new THREE.BoxGeometry(0.55, 0.55, 0.18);
-  const chest = mesh(chestGeo, accentMat);
-  chest.position.set(0, 0.28, 0.32);
-  chest.rotation.x = 0.55;
+// ─────────────────────────────────────────────
+//  SETUP
+// ─────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
 
-  // Chest glow strip
-  const stripGeo = new THREE.BoxGeometry(0.04, 0.4, 0.04);
-  const strip = mesh(stripGeo, glowMat);
-  strip.position.set(0, 0.28, 0.42);
-  strip.rotation.x = 0.55;
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color(0x000208);
+scene.fog = new THREE.FogExp2(0x000208, 0.06);
 
-  // ── Head ──────────────────────────────────────────────────────────────────
-  const head = new THREE.Group();
-  eagle.add(head);
-  head.position.set(0, 0.72, 0.44);
-  head.rotation.x = -0.3;
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
+camera.position.set(0, 0.8, 4.2);
+camera.lookAt(0, -0.3, 0);
 
-  const headGeo = new THREE.SphereGeometry(0.22, 16, 16);
-  const headMesh = mesh(headGeo, cyberMat, head);
+// ─────────────────────────────────────────────
+//  POST-PROCESSING
+// ─────────────────────────────────────────────
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
 
-  // Cranial visor
-  const visorGeo = new THREE.BoxGeometry(0.32, 0.1, 0.08);
-  const visor = mesh(visorGeo, accentMat, head);
-  visor.position.set(0, 0.05, 0.18);
+const bloom = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.9, 0.4, 0.1
+);
+composer.addPass(bloom);
 
-  // Eyes — red glowing orbs
-  [-0.09, 0.09].forEach((x) => {
-    const eyeGeo = new THREE.SphereGeometry(0.05, 12, 12);
-    const eye = mesh(eyeGeo, redGlowMat, head);
-    eye.position.set(x, 0.04, 0.2);
-
-    const glowGeo = new THREE.SphereGeometry(0.07, 8, 8);
-    const glow = new THREE.Mesh(glowGeo, new THREE.MeshStandardMaterial({
-      color: 0xff2040, emissive: 0xff2040, emissiveIntensity: 1, transparent: true, opacity: 0.3,
-    }));
-    glow.position.copy(eye.position);
-    head.add(glow);
-  });
-
-  // Beak
-  const beakGeo = new THREE.ConeGeometry(0.06, 0.28, 8);
-  const beak = mesh(beakGeo, accentMat, head);
-  beak.rotation.x = Math.PI / 2;
-  beak.position.set(0, -0.03, 0.34);
-
-  // Beak hook
-  const hookGeo = new THREE.TorusGeometry(0.055, 0.012, 8, 16, Math.PI * 0.6);
-  const hook = mesh(hookGeo, accentMat, head);
-  hook.position.set(0, -0.08, 0.46);
-  hook.rotation.x = -0.5;
-  hook.rotation.z = Math.PI;
-
-  // ── Wings ─────────────────────────────────────────────────────────────────
-  function makeWing(side) {
-    const wingGroup = new THREE.Group();
-    eagle.add(wingGroup);
-    const s = side; // 1 = right, -1 = left
-
-    wingGroup.position.set(0, 0.15, -0.05);
-
-    // Primary wing panel — swept back, angled down for dive
-    const primaryGeo = new THREE.BufferGeometry();
-    const verts = new Float32Array([
-      0,     0,     0,      // root base
-      s*0.3, -0.15, -0.05, // inner mid
-      s*1.8, -0.4,  -0.35, // outer tip
-      s*2.1, -0.55, -0.5,  // far tip
-      s*1.6, 0.05,  -0.6,  // upper sweep
-      s*0.8, 0.1,   -0.3,  // upper inner
-    ]);
-    const indices = [0,1,2, 0,2,3, 0,3,4, 0,4,5];
-    primaryGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-    primaryGeo.setIndex(indices);
-    primaryGeo.computeVertexNormals();
-    const primaryWing = new THREE.Mesh(primaryGeo, featherMat);
-    wingGroup.add(primaryWing);
-
-    // Wing edge glow line
-    const edgePoints = [
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(s*0.8, 0.1, -0.3),
-      new THREE.Vector3(s*1.6, 0.05, -0.6),
-      new THREE.Vector3(s*2.1, -0.55, -0.5),
-      new THREE.Vector3(s*1.8, -0.4, -0.35),
-    ];
-    const edgeCurve = new THREE.CatmullRomCurve3(edgePoints);
-    const edgeGeo = new THREE.TubeGeometry(edgeCurve, 20, 0.008, 4, false);
-    const edgeMesh = new THREE.Mesh(edgeGeo, glowMat);
-    wingGroup.add(edgeMesh);
-
-    // Feather struts (secondary detail)
-    for (let i = 1; i <= 5; i++) {
-      const t = i / 6;
-      const strutGeo = new THREE.CylinderGeometry(0.005, 0.003, 0.5 + t * 0.6, 4);
-      const strut = new THREE.Mesh(strutGeo, accentMat);
-      strut.position.set(s * t * 1.6, -0.2 * t, -0.25 * t);
-      strut.rotation.z = s * (0.3 + t * 0.5);
-      strut.rotation.x = 0.2;
-      wingGroup.add(strut);
+// Glitch shader
+const GlitchShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    amount:   { value: 0.0 },
+    seed:     { value: 0.0 }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float amount;
+    uniform float seed;
+    varying vec2 vUv;
 
-    // Secondary wing fold (alula)
-    const alulaGeo = new THREE.ConeGeometry(0.06, 0.45, 6);
-    const alula = new THREE.Mesh(alulaGeo, featherMat);
-    alula.position.set(s * 0.5, 0.08, -0.18);
-    alula.rotation.z = s * (-0.3);
-    alula.rotation.x = 0.4;
-    wingGroup.add(alula);
-  }
+    float rand(vec2 c){ return fract(sin(dot(c, vec2(12.9898,78.233))) * 43758.5453); }
 
-  makeWing(1);
-  makeWing(-1);
-
-  // ── Tail ──────────────────────────────────────────────────────────────────
-  const tailGroup = new THREE.Group();
-  eagle.add(tailGroup);
-  tailGroup.position.set(0, -0.3, -0.65);
-  tailGroup.rotation.x = 0.4;
-
-  for (let i = -2; i <= 2; i++) {
-    const geo = new THREE.BoxGeometry(0.12, 0.02, 0.55);
-    const m = new THREE.Mesh(geo, featherMat);
-    m.position.set(i * 0.1, 0, 0);
-    m.rotation.y = i * 0.1;
-    tailGroup.add(m);
-  }
-
-  // Tail glow
-  const tailEdge = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.01, 0.015), glowMat);
-  tailEdge.position.set(0, 0, 0.27);
-  tailGroup.add(tailEdge);
-
-  // ── Legs ──────────────────────────────────────────────────────────────────
-  function makeLeg(side) {
-    const legGroup = new THREE.Group();
-    eagle.add(legGroup);
-    legGroup.position.set(side * 0.18, -0.22, 0.25);
-
-    // Upper leg
-    const upperGeo = new THREE.CylinderGeometry(0.055, 0.04, 0.4, 8);
-    const upper = new THREE.Mesh(upperGeo, cyberMat);
-    upper.position.set(0, -0.2, 0);
-    upper.rotation.x = 0.3;
-    legGroup.add(upper);
-
-    // Knee joint
-    const kneeGeo = new THREE.SphereGeometry(0.055, 8, 8);
-    const knee = new THREE.Mesh(kneeGeo, accentMat);
-    knee.position.set(0, -0.42, 0.12);
-    legGroup.add(knee);
-
-    // Lower leg (tarsometatarsus)
-    const lowerGeo = new THREE.CylinderGeometry(0.04, 0.055, 0.5, 8);
-    const lower = new THREE.Mesh(lowerGeo, cyberMat);
-    lower.position.set(0, -0.72, 0.22);
-    lower.rotation.x = -0.6;
-    legGroup.add(lower);
-
-    // Glow ring on ankle
-    const ankleRingGeo = new THREE.TorusGeometry(0.055, 0.01, 6, 16);
-    const ankleRing = new THREE.Mesh(ankleRingGeo, glowMat);
-    ankleRing.position.set(0, -0.95, 0.38);
-    ankleRing.rotation.x = Math.PI / 2;
-    legGroup.add(ankleRing);
-
-    // Talons — OPEN position (spread 180°)
-    makeTalons(legGroup, side, 0, -0.95, 0.38);
-  }
-
-  function makeTalons(group, side, x, y, z) {
-    // 4 talons per foot spread wide open
-    const talonAngles = [-65, -22, 22, 65]; // degrees spread around z-axis
-    const talonLengths = [0.42, 0.55, 0.52, 0.38]; // different lengths
-    const talonCurves = [0.35, 0.4, 0.38, 0.32]; // curvature
-
-    talonAngles.forEach((angleDeg, i) => {
-      const talonGroup = new THREE.Group();
-      group.add(talonGroup);
-      talonGroup.position.set(x, y, z);
-
-      const angle = (angleDeg * Math.PI) / 180;
-      const len = talonLengths[i];
-      const curve = talonCurves[i];
-
-      // Build curved talon using tube + CatmullRom
-      const talonPoints = [];
-      const segments = 10;
-      for (let s = 0; s <= segments; s++) {
-        const t = s / segments;
-        const px = Math.sin(angle) * t * len * 0.7;
-        const py = -t * len * 0.5 - curve * t * t * 0.5;
-        const pz = Math.cos(angle) * t * len * 0.7 + t * 0.12;
-        talonPoints.push(new THREE.Vector3(px, py, pz));
+    void main() {
+      vec2 uv = vUv;
+      if (amount > 0.01) {
+        float band = floor(uv.y * 50.0) / 50.0;
+        float r = rand(vec2(band, seed));
+        if (r < 0.4) uv.x += (rand(vec2(uv.y * 13.7, seed)) - 0.5) * amount * 0.06;
+        if (rand(vec2(floor(uv.y * 8.0), seed * 2.1)) > 0.96)
+          uv.x += (rand(vec2(uv.y, seed)) - 0.5) * amount * 0.18;
       }
-
-      const talonCurveObj = new THREE.CatmullRomCurve3(talonPoints);
-      const talonRadii = [];
-      for (let s = 0; s <= 20; s++) {
-        talonRadii.push(0.022 * (1 - (s / 20) * 0.85));
-      }
-
-      const talonGeo = new THREE.TubeGeometry(talonCurveObj, 20, 0.016, 6, false);
-      const talonMesh = new THREE.Mesh(talonGeo, cyberMat);
-      talonGroup.add(talonMesh);
-
-      // Talon tip glow
-      const tipPos = talonPoints[talonPoints.length - 1];
-      const tipGeo = new THREE.SphereGeometry(0.018, 6, 6);
-      const tip = new THREE.Mesh(tipGeo, glowMat);
-      tip.position.copy(tipPos);
-      talonGroup.add(tip);
-
-      // Talon edge highlight
-      const edgeGeo = new THREE.TubeGeometry(talonCurveObj, 20, 0.004, 4, false);
-      const edge = new THREE.Mesh(edgeGeo, accentMat);
-      talonGroup.add(edge);
-
-      // Scute (scale) detail on each talon segment
-      for (let s = 1; s <= 4; s++) {
-        const pt = talonCurveObj.getPoint(s / 5);
-        const scuteGeo = new THREE.BoxGeometry(0.025, 0.008, 0.04);
-        const scute = new THREE.Mesh(scuteGeo, accentMat);
-        scute.position.copy(pt);
-        scute.lookAt(talonCurveObj.getPoint((s + 0.1) / 5));
-        talonGroup.add(scute);
-      }
-    });
-
-    // Rear talon (hallux) — pointing back
-    const halluxGroup = new THREE.Group();
-    group.add(halluxGroup);
-    halluxGroup.position.set(x, y, z);
-
-    const halluxPts = [
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, -0.12, -0.18),
-      new THREE.Vector3(0, -0.22, -0.32),
-    ];
-    const halluxCurve = new THREE.CatmullRomCurve3(halluxPts);
-    const halluxGeo = new THREE.TubeGeometry(halluxCurve, 12, 0.018, 6, false);
-    halluxGroup.add(new THREE.Mesh(halluxGeo, cyberMat));
-
-    const halluxTipGeo = new THREE.SphereGeometry(0.016, 6, 6);
-    const halluxTip = new THREE.Mesh(halluxTipGeo, glowMat);
-    halluxTip.position.copy(halluxPts[2]);
-    halluxGroup.add(halluxTip);
-  }
-
-  makeLeg(1);
-  makeLeg(-1);
-
-  // ── Circuit board detail plates ───────────────────────────────────────────
-  function addCircuitPlate(parent, w, h, px, py, pz, rx, ry) {
-    const geo = new THREE.PlaneGeometry(w, h, 4, 4);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x001a2a,
-      metalness: 0.8,
-      roughness: 0.3,
-      emissive: 0x003344,
-      emissiveIntensity: 0.2,
-      side: THREE.DoubleSide,
-    });
-    const plate = new THREE.Mesh(geo, mat);
-    plate.position.set(px, py, pz);
-    plate.rotation.x = rx || 0;
-    plate.rotation.y = ry || 0;
-    parent.add(plate);
-
-    // Circuit lines (glowing)
-    for (let i = 0; i < 3; i++) {
-      const lineGeo = new THREE.BoxGeometry(w * 0.6, 0.005, 0.005);
-      const line = new THREE.Mesh(lineGeo, glowMat);
-      line.position.set(px, py + (i - 1) * h * 0.25, pz + 0.005);
-      line.rotation.x = rx || 0;
-      line.rotation.y = ry || 0;
-      parent.add(line);
+      float split = amount * 0.007 + 0.0005;
+      vec4 cr = texture2D(tDiffuse, uv + vec2(split, 0.0));
+      vec4 cg = texture2D(tDiffuse, uv);
+      vec4 cb = texture2D(tDiffuse, uv - vec2(split, 0.0));
+      gl_FragColor = vec4(cr.r, cg.g, cb.b, 1.0);
     }
+  `
+};
+
+const glitchPass = new ShaderPass(GlitchShader);
+composer.addPass(glitchPass);
+composer.addPass(new OutputPass());
+
+// ─────────────────────────────────────────────
+//  LIGHTING
+// ─────────────────────────────────────────────
+const ambient = new THREE.AmbientLight(0x060a14, 2.0);
+scene.add(ambient);
+
+// Warm amber key — upper right
+const keyLight = new THREE.DirectionalLight(0xffb347, 2.8);
+keyLight.position.set(3, 4, 2);
+scene.add(keyLight);
+
+// Electric blue rim — behind
+const rimLight = new THREE.DirectionalLight(0x0066ff, 2.2);
+rimLight.position.set(-2, 1, -4);
+scene.add(rimLight);
+
+// Cool teal fill — below
+const fillLight = new THREE.DirectionalLight(0x00ffcc, 0.9);
+fillLight.position.set(0, -3, 2);
+scene.add(fillLight);
+
+// ─────────────────────────────────────────────
+//  MATERIAL
+// ─────────────────────────────────────────────
+const talonMat = new THREE.MeshStandardMaterial({
+  color: 0x0a0806,
+  roughness: 0.4,
+  metalness: 0.12,
+  envMapIntensity: 1.0,
+});
+
+// ─────────────────────────────────────────────
+//  TALON GROUP
+// ─────────────────────────────────────────────
+const talonGroup = new THREE.Group();
+talonGroup.rotation.x = -0.18;
+talonGroup.rotation.y =  0.25;
+scene.add(talonGroup);
+
+// Helper: build one toe from control points + per-point radii
+function createToe(points, radii, mat, parent) {
+  const up = new THREE.Vector3(0, 1, 0);
+  const q  = new THREE.Quaternion();
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const a   = new THREE.Vector3(...points[i]);
+    const b   = new THREE.Vector3(...points[i + 1]);
+    const dir  = b.clone().sub(a).normalize();
+    const dist = a.distanceTo(b);
+    const mid  = a.clone().lerp(b, 0.5);
+
+    // Cylinder segment
+    const cylGeo = new THREE.CylinderGeometry(radii[i + 1], radii[i], dist, 10, 1);
+    const cylMesh = new THREE.Mesh(cylGeo, mat);
+    cylMesh.position.copy(mid);
+
+    // Orient along dir — antiparallel guard
+    if (Math.abs(dir.dot(up) + 1.0) < 1e-6) {
+      cylMesh.rotation.z = Math.PI;
+    } else {
+      q.setFromUnitVectors(up, dir);
+      cylMesh.quaternion.copy(q);
+    }
+    parent.add(cylMesh);
+
+    // Sphere joint at segment start
+    const sphGeo  = new THREE.SphereGeometry(radii[i], 8, 6);
+    const sphMesh = new THREE.Mesh(sphGeo, mat);
+    sphMesh.position.copy(a);
+    parent.add(sphMesh);
   }
 
-  addCircuitPlate(eagle, 0.25, 0.35, 0.26, 0.2, 0.28, 0.55, 0.4);
-  addCircuitPlate(eagle, 0.25, 0.35, -0.26, 0.2, 0.28, 0.55, -0.4);
+  // Tiny tip sphere at last point
+  const last    = points[points.length - 1];
+  const lastRad = radii[radii.length - 1];
+  const tipMesh = new THREE.Mesh(new THREE.SphereGeometry(lastRad * 1.25, 8, 6), mat);
+  tipMesh.position.set(...last);
+  parent.add(tipMesh);
 
-  // ── Eagle initial orientation (diving — head slightly down) ───────────────
-  eagle.rotation.x = -0.15;
-  eagle.position.y = 0.3;
+  // Claw-tip glow
+  const glow = new THREE.PointLight(0x0088ff, 0.5, 1.0);
+  glow.position.set(...last);
+  parent.add(glow);
+}
 
-  // ─── Grid floor ───────────────────────────────────────────────────────────
-  const gridHelper = new THREE.GridHelper(30, 40, 0x003344, 0x001122);
-  gridHelper.position.y = -4;
-  scene.add(gridHelper);
+// ── Tarsometatarsus (foot cylinder) ──
+const tarsusMesh = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.08, 0.12, 0.55, 10),
+  talonMat
+);
+tarsusMesh.position.set(0, 0.38, 0);
+talonGroup.add(tarsusMesh);
 
-  // ─── Particle system (sparks / data streams) ──────────────────────────────
-  const PARTICLE_COUNT = 1200;
-  const partPositions = new Float32Array(PARTICLE_COUNT * 3);
-  const partSpeeds = new Float32Array(PARTICLE_COUNT);
-  const partSizes = new Float32Array(PARTICLE_COUNT);
+// ── Middle toe (toe3) — straight forward ──
+const midPts = [
+  [ 0.00,  0.08,  0.10],
+  [ 0.00, -0.10,  0.34],
+  [ 0.00, -0.30,  0.54],
+  [ 0.00, -0.52,  0.68],
+  [ 0.00, -0.76,  0.72],
+  [ 0.00, -1.00,  0.63],
+  [-0.02, -1.20,  0.44]
+];
+const midRadii = [0.10, 0.09, 0.08, 0.065, 0.048, 0.028, 0.006];
+createToe(midPts, midRadii, talonMat, talonGroup);
 
+// Helper: rotate toe points around Y axis and scale z+y
+function rotateToeY(pts, angle, scaleZY) {
+  const c = Math.cos(angle), s = Math.sin(angle);
+  return pts.map(([x, y, z]) => {
+    const rx =  x * c + z * s;
+    const rz = -x * s + z * c;
+    return [rx, y * scaleZY, rz * scaleZY];
+  });
+}
+
+// ── Inner toe (toe2) — angled ~25 deg inward ──
+const innerPts   = rotateToeY(midPts, -0.42, 0.88);
+const innerRadii = [0.09, 0.08, 0.07, 0.055, 0.040, 0.022, 0.005];
+createToe(innerPts, innerRadii, talonMat, talonGroup);
+
+// ── Outer toe (toe4) — angled ~25 deg outward ──
+const outerPts = rotateToeY(midPts, +0.42, 0.88);
+createToe(outerPts, innerRadii, talonMat, talonGroup);
+
+// ── Hallux / rear toe (toe1) — backward ──
+const halluxPts = [
+  [ 0.02,  0.06, -0.10],
+  [ 0.01, -0.12, -0.30],
+  [ 0.00, -0.28, -0.44],
+  [-0.01, -0.40, -0.48],
+  [-0.02, -0.50, -0.40],
+  [-0.02, -0.56, -0.28]
+];
+const halluxRadii = [0.09, 0.08, 0.065, 0.048, 0.028, 0.007];
+createToe(halluxPts, halluxRadii, talonMat, talonGroup);
+
+// ─────────────────────────────────────────────
+//  HOLOGRAPHIC RINGS
+// ─────────────────────────────────────────────
+const ringMat = new THREE.MeshBasicMaterial({
+  color: 0x0055ff,
+  transparent: true,
+  opacity: 0.18,
+  blending: THREE.AdditiveBlending,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+});
+
+const rings = [];
+const ringDefs = [
+  { r: 1.4, tube: 0.008, tiltX: 0.3,  tiltZ: 0.1,  speed:  0.18 },
+  { r: 1.9, tube: 0.006, tiltX: -0.5, tiltZ: 0.3,  speed: -0.11 },
+  { r: 2.4, tube: 0.005, tiltX: 0.8,  tiltZ: -0.2, speed:  0.07 },
+];
+ringDefs.forEach(d => {
+  const mesh = new THREE.Mesh(
+    new THREE.TorusGeometry(d.r, d.tube, 6, 120),
+    ringMat.clone()
+  );
+  mesh.rotation.x = d.tiltX;
+  mesh.rotation.z = d.tiltZ;
+  mesh.userData.speed = d.speed;
+  scene.add(mesh);
+  rings.push(mesh);
+});
+
+// ─────────────────────────────────────────────
+//  PARTICLES
+// ─────────────────────────────────────────────
+const PARTICLE_COUNT = 600;
+const pPositions = new Float32Array(PARTICLE_COUNT * 3);
+const pSeeds     = new Float32Array(PARTICLE_COUNT * 3);
+
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  const r     = 1.5 + Math.random() * 3.0;
+  const theta = Math.random() * Math.PI * 2;
+  const phi   = Math.acos(2.0 * Math.random() - 1.0);
+  pPositions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+  pPositions[i * 3 + 1] = r * Math.cos(phi);
+  pPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+  pSeeds[i * 3]     = Math.random() * Math.PI * 2;
+  pSeeds[i * 3 + 1] = 0.3 + Math.random() * 0.7;
+  pSeeds[i * 3 + 2] = (Math.random() - 0.5) * 0.005;
+}
+
+const pGeo = new THREE.BufferGeometry();
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
+
+const pMat = new THREE.PointsMaterial({
+  color: 0x0088cc,
+  size: 0.022,
+  transparent: true,
+  opacity: 0.55,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+});
+
+const particles = new THREE.Points(pGeo, pMat);
+scene.add(particles);
+
+// ─────────────────────────────────────────────
+//  DRAG SPRING INTERACTION
+// ─────────────────────────────────────────────
+let isDragging     = false;
+let dragStartX     = 0, dragStartY = 0;
+let targetExtraRotX = 0, targetExtraRotY = 0;
+let velX = 0, velY = 0, extraRotX = 0, extraRotY = 0;
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+canvas.addEventListener('mousedown', e => {
+  isDragging = true;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+});
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = (e.clientX - dragStartX) * 0.003;
+  const dy = (e.clientY - dragStartY) * 0.003;
+  targetExtraRotY = clamp(dx, -0.55, 0.55);
+  targetExtraRotX = clamp(dy, -0.35, 0.35);
+});
+window.addEventListener('mouseup', () => {
+  isDragging      = false;
+  targetExtraRotX = 0;
+  targetExtraRotY = 0;
+});
+
+canvas.addEventListener('touchstart', e => {
+  isDragging = true;
+  dragStartX = e.touches[0].clientX;
+  dragStartY = e.touches[0].clientY;
+}, { passive: true });
+window.addEventListener('touchmove', e => {
+  if (!isDragging) return;
+  const dx = (e.touches[0].clientX - dragStartX) * 0.003;
+  const dy = (e.touches[0].clientY - dragStartY) * 0.003;
+  targetExtraRotY = clamp(dx, -0.55, 0.55);
+  targetExtraRotX = clamp(dy, -0.35, 0.35);
+}, { passive: true });
+window.addEventListener('touchend', () => {
+  isDragging      = false;
+  targetExtraRotX = 0;
+  targetExtraRotY = 0;
+});
+
+// ─────────────────────────────────────────────
+//  CURSOR + RETICLE
+// ─────────────────────────────────────────────
+const cursorEl  = document.getElementById('cursor');
+const ringEl    = document.getElementById('cursor-ring');
+const reticleEl = document.getElementById('reticle');
+
+let mouseX = window.innerWidth / 2, mouseY = window.innerHeight / 2;
+let ringX  = mouseX, ringY  = mouseY;
+let retX   = mouseX, retY   = mouseY;
+
+window.addEventListener('mousemove', e => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+  cursorEl.style.left = mouseX + 'px';
+  cursorEl.style.top  = mouseY + 'px';
+});
+
+// ─────────────────────────────────────────────
+//  GLITCH SYSTEM
+// ─────────────────────────────────────────────
+const heroTitle  = document.querySelector('.hero-title');
+let glitchAmount = 0.0;
+let glitchActive = false;
+
+function triggerGlitch() {
+  glitchActive = true;
+  glitchAmount = 1.0;
+  glitchPass.uniforms.seed.value = Math.random() * 100;
+  heroTitle.classList.add('glitch');
+  setTimeout(() => heroTitle.classList.remove('glitch'), 120);
+  // Next glitch in 3–8 seconds
+  setTimeout(triggerGlitch, 3000 + Math.random() * 5000);
+}
+setTimeout(triggerGlitch, 3500);
+
+// ─────────────────────────────────────────────
+//  HUD FLICKER
+// ─────────────────────────────────────────────
+const hudFns = {
+  'hv-grip':   () => (90 + Math.random() * 8).toFixed(1) + '%',
+  'hv-torque': () => Math.floor(308 + Math.random() * 10) + ' N\u00b7m',
+  'hv-dive':   () => Math.floor(382 + Math.random() * 8) + ' km/h',
+  'hv-neural': () => (96 + Math.random() * 3).toFixed(1) + '%',
+};
+setInterval(() => {
+  const keys = Object.keys(hudFns);
+  const k    = keys[Math.floor(Math.random() * keys.length)];
+  const el   = document.getElementById(k);
+  if (el) el.textContent = hudFns[k]();
+}, 800);
+
+// ─────────────────────────────────────────────
+//  RESIZE
+// ─────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+  bloom.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ─────────────────────────────────────────────
+//  ANIMATE LOOP
+// ─────────────────────────────────────────────
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  // Spring physics
+  const spring = 0.10, damp = 0.78;
+  velX += (targetExtraRotX - extraRotX) * spring; velX *= damp; extraRotX += velX;
+  velY += (targetExtraRotY - extraRotY) * spring; velY *= damp; extraRotY += velY;
+
+  // Talon float + drag
+  talonGroup.rotation.x = -0.18 + Math.sin(t * 0.35) * 0.04 + extraRotX;
+  talonGroup.rotation.y =  0.25 + Math.sin(t * 0.18) * 0.12 + extraRotY;
+  talonGroup.position.y =  Math.sin(t * 0.72) * 0.09;
+  talonGroup.position.x =  Math.sin(t * 0.44) * 0.04;
+
+  // Rings rotate
+  rings.forEach(ring => {
+    ring.rotation.y += ring.userData.speed * 0.008;
+    ring.rotation.z += ring.userData.speed * 0.004;
+  });
+
+  // Particle drift + wrap
+  const pos = pGeo.attributes.position.array;
   for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const r = 8 + Math.random() * 10;
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.random() * Math.PI;
-    partPositions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
-    partPositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-    partPositions[i * 3 + 2] = r * Math.cos(phi);
-    partSpeeds[i] = 0.002 + Math.random() * 0.005;
-    partSizes[i] = 1.5 + Math.random() * 3;
-  }
-
-  const partGeo = new THREE.BufferGeometry();
-  partGeo.setAttribute('position', new THREE.BufferAttribute(partPositions, 3));
-  partGeo.setAttribute('size', new THREE.BufferAttribute(partSizes, 1));
-
-  const partMat = new THREE.PointsMaterial({
-    color: 0x00f0ff,
-    size: 0.04,
-    transparent: true,
-    opacity: 0.7,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-
-  const particles = new THREE.Points(partGeo, partMat);
-  scene.add(particles);
-
-  // ─── Speed lines (motion blur streaks) ────────────────────────────────────
-  function makeSpeedLine() {
-    const len = 0.5 + Math.random() * 2.5;
-    const geo = new THREE.BufferGeometry();
-    const x = (Math.random() - 0.5) * 6;
-    const y = (Math.random() - 0.5) * 4;
-    const z = (Math.random() - 0.5) * 2;
-    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
-      x, y, z,
-      x, y - len * 0.1, z + len,
-    ]), 3));
-    const mat = new THREE.LineBasicMaterial({
-      color: 0x00f0ff,
-      transparent: true,
-      opacity: 0.12 + Math.random() * 0.15,
-      blending: THREE.AdditiveBlending,
-    });
-    return new THREE.Line(geo, mat);
-  }
-
-  const speedLines = [];
-  for (let i = 0; i < 60; i++) {
-    const line = makeSpeedLine();
-    scene.add(line);
-    speedLines.push(line);
-  }
-
-  // ─── Mouse interaction ────────────────────────────────────────────────────
-  let targetRotX = 0, targetRotY = 0;
-  let isDragging = false, lastX = 0, lastY = 0;
-  let autoRotate = true;
-  let autoRotateTimer = null;
-
-  document.addEventListener('mousedown', (e) => {
-    isDragging = true;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    autoRotate = false;
-    clearTimeout(autoRotateTimer);
-  });
-
-  document.addEventListener('mouseup', () => {
-    isDragging = false;
-    autoRotateTimer = setTimeout(() => { autoRotate = true; }, 3000);
-  });
-
-  document.addEventListener('mousemove', (e) => {
-    if (!isDragging) {
-      // Gentle parallax tilt with mouse
-      const nx = (e.clientX / window.innerWidth - 0.5) * 0.3;
-      const ny = (e.clientY / window.innerHeight - 0.5) * 0.2;
-      targetRotY = nx;
-      targetRotX = -ny * 0.5;
-      return;
+    const seed  = pSeeds[i * 3];
+    const spd   = pSeeds[i * 3 + 1] * 0.032;
+    const drift = pSeeds[i * 3 + 2];
+    pos[i * 3]     += drift;
+    pos[i * 3 + 1] += Math.sin(t * spd + seed) * 0.0006;
+    pos[i * 3 + 2] += Math.cos(t * spd * 0.75 + seed) * 0.0004;
+    // Wrap if drifted too far from center
+    const px = pos[i * 3], py = pos[i * 3 + 1], pz = pos[i * 3 + 2];
+    if (px * px + py * py + pz * pz > 25) {
+      pos[i * 3]     *= 0.3;
+      pos[i * 3 + 1] *= 0.3;
+      pos[i * 3 + 2] *= 0.3;
     }
-    const dx = e.clientX - lastX;
-    const dy = e.clientY - lastY;
-    targetRotY += dx * 0.005;
-    targetRotX += dy * 0.005;
-    targetRotX = Math.max(-0.6, Math.min(0.6, targetRotX));
-    lastX = e.clientX;
-    lastY = e.clientY;
-  });
+  }
+  pGeo.attributes.position.needsUpdate = true;
 
-  // Touch support
-  let lastTouchX = 0, lastTouchY = 0;
-  document.addEventListener('touchstart', (e) => {
-    lastTouchX = e.touches[0].clientX;
-    lastTouchY = e.touches[0].clientY;
-    autoRotate = false;
-  }, { passive: true });
-
-  document.addEventListener('touchmove', (e) => {
-    const dx = e.touches[0].clientX - lastTouchX;
-    const dy = e.touches[0].clientY - lastTouchY;
-    targetRotY += dx * 0.005;
-    targetRotX += dy * 0.003;
-    lastTouchX = e.touches[0].clientX;
-    lastTouchY = e.touches[0].clientY;
-  }, { passive: true });
-
-  // Scroll zoom
-  document.addEventListener('wheel', (e) => {
-    camera.position.z = Math.max(4, Math.min(16, camera.position.z + e.deltaY * 0.01));
-  }, { passive: true });
-
-  // ─── HUD live stats ───────────────────────────────────────────────────────
-  function randomFlicker(base, variance) {
-    return (base + (Math.random() - 0.5) * variance).toFixed(1);
+  // Glitch decay
+  if (glitchActive) {
+    glitchAmount *= 0.82;
+    glitchPass.uniforms.amount.value = glitchAmount;
+    if (glitchAmount < 0.01) { glitchActive = false; glitchAmount = 0.0; }
+  } else {
+    glitchPass.uniforms.amount.value = 0.0;
   }
 
-  setInterval(() => {
-    document.getElementById('stat-thrust').textContent =
-      (9800 + Math.floor(Math.random() * 80)).toLocaleString() + ' m/s';
-    document.getElementById('stat-alt').textContent =
-      (31000 + Math.floor(Math.random() * 500)).toLocaleString() + ' m';
-    document.getElementById('stat-neural').textContent =
-      randomFlicker(98.7, 0.4) + '%';
-  }, 1500);
+  // Cursor ring lag
+  ringX += (mouseX - ringX) * 0.14;
+  ringY += (mouseY - ringY) * 0.14;
+  ringEl.style.left = ringX + 'px';
+  ringEl.style.top  = ringY + 'px';
 
-  // ─── Animation loop ───────────────────────────────────────────────────────
-  let time = 0;
-  const currentRot = { x: 0, y: 0 };
+  // Reticle lag (slower) + slow spin
+  retX += (mouseX - retX) * 0.06;
+  retY += (mouseY - retY) * 0.06;
+  reticleEl.style.left      = retX + 'px';
+  reticleEl.style.top       = retY + 'px';
+  reticleEl.style.transform = `translate(-50%, -50%) rotate(${t * 8}deg)`;
 
-  function animate() {
-    requestAnimationFrame(animate);
-    time += 0.01;
+  composer.render();
+}
+animate();
 
-    // Auto-rotate
-    if (autoRotate) {
-      targetRotY += 0.003;
-    }
-
-    // Smooth camera-driven eagle rotation
-    currentRot.x += (targetRotX - currentRot.x) * 0.06;
-    currentRot.y += (targetRotY - currentRot.y) * 0.06;
-    eagle.rotation.y = currentRot.y;
-    eagle.rotation.x = -0.15 + currentRot.x;
-
-    // Subtle hover bob
-    eagle.position.y = 0.3 + Math.sin(time * 0.8) * 0.06;
-
-    // Wing breathing effect
-    const wingPulse = Math.sin(time * 1.2) * 0.015;
-    eagle.children.forEach((child, i) => {
-      if (child instanceof THREE.Group && i > 1) {
-        child.rotation.z = wingPulse;
-      }
-    });
-
-    // Particle rotation
-    particles.rotation.y += 0.0008;
-    particles.rotation.x += 0.0003;
-
-    // Speed line pulse
-    speedLines.forEach((line, i) => {
-      line.material.opacity = 0.05 + 0.15 * Math.abs(Math.sin(time * 2 + i * 0.3));
-    });
-
-    // Eye glow pulse
-    const eyePulse = 2.5 + Math.sin(time * 3) * 1.5;
-    scene.traverse((obj) => {
-      if (obj.isMesh && obj.material && obj.material.emissive) {
-        const c = obj.material.color;
-        if (c && c.r > 0.8 && c.g < 0.2) {
-          obj.material.emissiveIntensity = eyePulse;
-        }
-      }
-    });
-
-    // Underlight pulse
-    underLight.intensity = 1.0 + Math.sin(time * 1.5) * 0.5;
-    underLight.color.setHSL(0.55 + Math.sin(time * 0.3) * 0.05, 1, 0.5);
-
-    renderer.render(scene, camera);
-  }
-
-  animate();
-
-  // ─── Resize handler ───────────────────────────────────────────────────────
-  window.addEventListener('resize', () => {
-    const W = window.innerWidth, H = window.innerHeight;
-    camera.aspect = W / H;
-    camera.updateProjectionMatrix();
-    renderer.setSize(W, H);
-  });
-
-})();
+// ─────────────────────────────────────────────
+//  LOADING FADE-OUT
+// ─────────────────────────────────────────────
+setTimeout(() => {
+  const loadEl = document.getElementById('loading');
+  loadEl.classList.add('out');
+  setTimeout(() => { loadEl.style.display = 'none'; }, 900);
+}, 2000);
 </script>
 </body>
 </html>
