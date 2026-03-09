@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "name": "opentalon",
+  "outputDirectory": "ui",
+  "buildCommand": null,
+  "installCommand": null,
+  "routes": [
+    { "src": "/", "dest": "/opentalon.html" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ]
+}

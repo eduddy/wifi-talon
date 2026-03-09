@@ -1,0 +1,13 @@
+{
+  "name": "opentalon",
+  "version": "1.0.0",
+  "description": "OpenTalon — Cybernetic Precision Landing Page",
+  "scripts": {
+    "start": "npx serve ui -p 4000 --single",
+    "dev": "npx serve ui -p 4000 --single",
+    "preview": "npx serve ui -p 4000 --single"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
