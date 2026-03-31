@@ -469,8 +469,8 @@ scene.background = new THREE.Color(0x000208);
 scene.fog = new THREE.FogExp2(0x000208, 0.06);
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
-camera.position.set(0, 0.8, 4.2);
-camera.lookAt(0, -0.3, 0);
+camera.position.set(0, 0.4, 5.2);
+camera.lookAt(0, 0.0, 0);
 
 // ─────────────────────────────────────────────
 //  POST-PROCESSING
@@ -550,120 +550,241 @@ fillLight.position.set(0, -3, 2);
 scene.add(fillLight);
 
 // ─────────────────────────────────────────────
-//  MATERIAL
+//  MATERIALS
 // ─────────────────────────────────────────────
-const talonMat = new THREE.MeshStandardMaterial({
-  color: 0x0a0806,
-  roughness: 0.4,
-  metalness: 0.12,
-  envMapIntensity: 1.0,
-});
+const darkBrown  = new THREE.MeshStandardMaterial({ color: 0x2c1808, roughness: 0.84, metalness: 0.05 });
+const whitePlume = new THREE.MeshStandardMaterial({ color: 0xdce5ea, roughness: 0.62, metalness: 0.03 });
+const beakGold   = new THREE.MeshStandardMaterial({ color: 0xd49408, roughness: 0.22, metalness: 0.40, emissive: 0x9a5800, emissiveIntensity: 0.14 });
+const eyeAmber   = new THREE.MeshStandardMaterial({ color: 0xffcc20, roughness: 0.04, metalness: 0.75, emissive: 0xffaa00, emissiveIntensity: 0.55 });
+const legGold    = new THREE.MeshStandardMaterial({ color: 0xc08810, roughness: 0.36, metalness: 0.30 });
+const pupilBlack = new THREE.MeshStandardMaterial({ color: 0x050302, roughness: 0.5,  metalness: 0.0  });
 
 // ─────────────────────────────────────────────
-//  TALON GROUP
+//  EAGLE GROUP
 // ─────────────────────────────────────────────
-const talonGroup = new THREE.Group();
-talonGroup.rotation.x = -0.18;
-talonGroup.rotation.y =  0.25;
-scene.add(talonGroup);
+const eagleGroup = new THREE.Group();
+eagleGroup.rotation.x = -0.08;
+eagleGroup.rotation.y =  0.15;
+scene.add(eagleGroup);
 
-// Helper: build one toe from control points + per-point radii
-function createToe(points, radii, mat, parent) {
-  const up = new THREE.Vector3(0, 1, 0);
-  const q  = new THREE.Quaternion();
+const bodyGroup = new THREE.Group();
+eagleGroup.add(bodyGroup);
 
-  for (let i = 0; i < points.length - 1; i++) {
-    const a   = new THREE.Vector3(...points[i]);
-    const b   = new THREE.Vector3(...points[i + 1]);
-    const dir  = b.clone().sub(a).normalize();
-    const dist = a.distanceTo(b);
-    const mid  = a.clone().lerp(b, 0.5);
+// ── TORSO ──
+const torso = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), darkBrown);
+torso.scale.set(0.36, 0.50, 0.30);
+torso.position.set(0, -0.05, 0);
+bodyGroup.add(torso);
 
-    // Cylinder segment
-    const cylGeo = new THREE.CylinderGeometry(radii[i + 1], radii[i], dist, 10, 1);
-    const cylMesh = new THREE.Mesh(cylGeo, mat);
-    cylMesh.position.copy(mid);
+const breast = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 10), darkBrown);
+breast.scale.set(1.0, 1.12, 1.18);
+breast.position.set(0, 0.06, 0.20);
+bodyGroup.add(breast);
 
-    // Orient along dir — antiparallel guard
-    if (Math.abs(dir.dot(up) + 1.0) < 1e-6) {
-      cylMesh.rotation.z = Math.PI;
-    } else {
-      q.setFromUnitVectors(up, dir);
-      cylMesh.quaternion.copy(q);
-    }
-    parent.add(cylMesh);
+const rump = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), darkBrown);
+rump.scale.set(0.90, 0.80, 0.75);
+rump.position.set(0, -0.28, -0.10);
+bodyGroup.add(rump);
 
-    // Sphere joint at segment start
-    const sphGeo  = new THREE.SphereGeometry(radii[i], 8, 6);
-    const sphMesh = new THREE.Mesh(sphGeo, mat);
-    sphMesh.position.copy(a);
-    parent.add(sphMesh);
+// ── TAIL ──
+const tailPivot = new THREE.Group();
+tailPivot.position.set(0, -0.36, -0.18);
+tailPivot.rotation.x = 0.42;
+bodyGroup.add(tailPivot);
+for (let i = -3; i <= 3; i++) {
+  const tf = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.044, 0.52, 5), Math.abs(i) <= 1 ? whitePlume : darkBrown);
+  tf.scale.z = 0.28;
+  tf.position.set(i * 0.062, 0, 0);
+  tf.rotation.z = i * 0.075;
+  tailPivot.add(tf);
+}
+
+// ── NECK ──
+const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.092, 0.158, 0.26, 12), whitePlume);
+neck.position.set(0, 0.40, 0.10);
+neck.rotation.x = -0.20;
+bodyGroup.add(neck);
+
+// ── HEAD ──
+const headPivot = new THREE.Group();
+headPivot.position.set(0, 0.62, 0.13);
+headPivot.rotation.x = -0.14;
+bodyGroup.add(headPivot);
+
+const skull = new THREE.Mesh(new THREE.SphereGeometry(0.178, 18, 14), whitePlume);
+headPivot.add(skull);
+
+for (const side of [-1, 1]) {
+  // Supraorbital brow ridge — gives the fierce eagle expression
+  const brow = new THREE.Mesh(new THREE.SphereGeometry(0.058, 8, 6), whitePlume);
+  brow.scale.set(1.05, 0.36, 0.92);
+  brow.position.set(side * 0.100, 0.076, 0.118);
+  headPivot.add(brow);
+
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.034, 10, 8), eyeAmber);
+  eye.position.set(side * 0.114, 0.018, 0.140);
+  headPivot.add(eye);
+
+  const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.017, 8, 6), pupilBlack);
+  pupil.position.set(side * 0.126, 0.018, 0.150);
+  headPivot.add(pupil);
+
+  const eyeGlow = new THREE.PointLight(0xffaa00, 0.38, 0.50);
+  eyeGlow.position.set(side * 0.114, 0.018, 0.140);
+  headPivot.add(eyeGlow);
+}
+
+// Upper beak — hooked (maxilla)
+const maxilla = new THREE.Mesh(new THREE.ConeGeometry(0.047, 0.24, 7), beakGold);
+maxilla.scale.set(1, 1, 0.52);
+maxilla.rotation.z = Math.PI / 2 - 0.28;
+maxilla.position.set(0, 0.006, 0.214);
+headPivot.add(maxilla);
+
+// Lower beak (mandible)
+const mandible = new THREE.Mesh(new THREE.ConeGeometry(0.034, 0.16, 6), beakGold);
+mandible.scale.set(1, 1, 0.55);
+mandible.rotation.z = Math.PI / 2 + 0.18;
+mandible.position.set(0, -0.042, 0.202);
+headPivot.add(mandible);
+
+// Cere (waxy base of beak)
+const cere = new THREE.Mesh(new THREE.SphereGeometry(0.040, 8, 6), beakGold);
+cere.scale.set(0.82, 0.52, 0.68);
+cere.position.set(0, 0.010, 0.184);
+headPivot.add(cere);
+
+// ── WINGS ──
+function buildWing(side) {
+  const g = new THREE.Group();
+
+  // Main wing panel — ShapeGeometry (DoubleSide handles mirror flip)
+  const sh = new THREE.Shape();
+  sh.moveTo(0.12, 0.00);
+  sh.bezierCurveTo(0.46, 0.14, 1.02, 0.19, 1.46, 0.10);
+  sh.bezierCurveTo(1.85, 0.04, 2.08, -0.04, 2.18, -0.13);
+  sh.bezierCurveTo(2.30, -0.23, 2.23, -0.34, 2.11, -0.39);
+  sh.bezierCurveTo(1.62, -0.49, 1.08, -0.49, 0.48, -0.41);
+  sh.bezierCurveTo(0.24, -0.34, 0.12, -0.22, 0.12, 0.00);
+  sh.closePath();
+  const panel = new THREE.Mesh(
+    new THREE.ShapeGeometry(sh, 32),
+    new THREE.MeshStandardMaterial({ color: 0x2c1808, roughness: 0.82, metalness: 0.04, side: THREE.DoubleSide })
+  );
+  panel.rotation.x = 0.10;
+  g.add(panel);
+
+  // Primary feathers — 8 large separated feathers at wingtip
+  [
+    { x: 1.98, y: -0.14, len: 0.34, a: -0.50 },
+    { x: 2.05, y: -0.21, len: 0.32, a: -0.63 },
+    { x: 2.09, y: -0.28, len: 0.30, a: -0.77 },
+    { x: 2.10, y: -0.35, len: 0.28, a: -0.91 },
+    { x: 2.08, y: -0.41, len: 0.26, a: -1.06 },
+    { x: 2.03, y: -0.46, len: 0.24, a: -1.21 },
+    { x: 1.95, y: -0.50, len: 0.22, a: -1.37 },
+    { x: 1.84, y: -0.52, len: 0.20, a: -1.52 },
+  ].forEach(d => {
+    const f = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.027, d.len, 5), darkBrown);
+    f.scale.z = 0.26;
+    f.position.set(d.x, d.y, 0.01);
+    f.rotation.z = d.a;
+    f.rotation.x = 0.06;
+    g.add(f);
+  });
+
+  // Secondary feather bumps along trailing edge
+  for (let i = 0; i < 6; i++) {
+    const t = i / 5;
+    const sf = new THREE.Mesh(new THREE.SphereGeometry(0.052 - t * 0.010, 8, 5), darkBrown);
+    sf.scale.set(2.1 + t * 0.8, 0.23, 0.68);
+    sf.position.set(0.28 + t * 1.08, -0.44 + t * 0.05, 0.01);
+    g.add(sf);
   }
 
-  // Tiny tip sphere at last point
-  const last    = points[points.length - 1];
-  const lastRad = radii[radii.length - 1];
-  const tipMesh = new THREE.Mesh(new THREE.SphereGeometry(lastRad * 1.25, 8, 6), mat);
-  tipMesh.position.set(...last);
-  parent.add(tipMesh);
+  // Leading-edge covert humps
+  for (let i = 0; i < 5; i++) {
+    const t = i / 4;
+    const cv = new THREE.Mesh(new THREE.SphereGeometry(0.068 - t * 0.013, 8, 6), darkBrown);
+    cv.scale.set(1.6 + t * 0.5, 0.30, 0.88);
+    cv.position.set(0.14 + t * 1.08, 0.09 - t * 0.04, 0.02);
+    g.add(cv);
+  }
 
-  // Claw-tip glow
-  const glow = new THREE.PointLight(0x0088ff, 0.5, 1.0);
-  glow.position.set(...last);
-  parent.add(glow);
+  // Shoulder join (thick covert mound at body)
+  const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), darkBrown);
+  shoulder.scale.set(0.85, 0.60, 0.70);
+  shoulder.position.set(0.20, 0.04, 0.02);
+  g.add(shoulder);
+
+  g.position.set(side * 0.30, 0.04, 0.02);
+  if (side === -1) g.scale.x = -1;
+  g.rotation.z = side * -0.13;
+  g.rotation.y = side * 0.06;
+  return g;
 }
+bodyGroup.add(buildWing(1));
+bodyGroup.add(buildWing(-1));
 
-// ── Tarsometatarsus (foot cylinder) ──
-const tarsusMesh = new THREE.Mesh(
-  new THREE.CylinderGeometry(0.08, 0.12, 0.55, 10),
-  talonMat
-);
-tarsusMesh.position.set(0, 0.38, 0);
-talonGroup.add(tarsusMesh);
+// ── LEGS ──
+function buildLeg(side) {
+  const g = new THREE.Group();
+  const upV = new THREE.Vector3(0, 1, 0);
+  const qTmp = new THREE.Quaternion();
 
-// ── Middle toe (toe3) — straight forward ──
-const midPts = [
-  [ 0.00,  0.08,  0.10],
-  [ 0.00, -0.10,  0.34],
-  [ 0.00, -0.30,  0.54],
-  [ 0.00, -0.52,  0.68],
-  [ 0.00, -0.76,  0.72],
-  [ 0.00, -1.00,  0.63],
-  [-0.02, -1.20,  0.44]
-];
-const midRadii = [0.10, 0.09, 0.08, 0.065, 0.048, 0.028, 0.006];
-createToe(midPts, midRadii, talonMat, talonGroup);
+  // Feathered thigh
+  const thigh = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), darkBrown);
+  thigh.scale.set(0.90, 1.40, 0.85);
+  g.add(thigh);
 
-// Helper: rotate toe points around Y axis and scale z+y
-function rotateToeY(pts, angle, scaleZY) {
-  const c = Math.cos(angle), s = Math.sin(angle);
-  return pts.map(([x, y, z]) => {
-    const rx =  x * c + z * s;
-    const rz = -x * s + z * c;
-    return [rx, y * scaleZY, rz * scaleZY];
+  // Tarsometatarsus
+  const tarsus = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.036, 0.30, 8), legGold);
+  tarsus.position.set(0, -0.22, 0.04);
+  g.add(tarsus);
+
+  // Toe builder
+  function addToe(pts, r0) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = new THREE.Vector3(...pts[i]);
+      const b = new THREE.Vector3(...pts[i + 1]);
+      const dir = b.clone().sub(a).normalize();
+      const dist = a.distanceTo(b);
+      const r = r0 - i * 0.004;
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.8, r, dist, 6), legGold);
+      seg.position.copy(a.clone().lerp(b, 0.5));
+      if (Math.abs(dir.dot(upV) + 1) < 1e-6) seg.rotation.z = Math.PI;
+      else { qTmp.setFromUnitVectors(upV, dir); seg.quaternion.copy(qTmp); }
+      g.add(seg);
+    }
+    const last = pts[pts.length - 1];
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.015, 6, 5), legGold);
+    tip.position.set(...last);
+    g.add(tip);
+  }
+
+  const base = [0.00, -0.37, 0.04];
+  // Three forward toes
+  [0, -0.38, 0.38].forEach(angle => {
+    const sc = 1.0 - Math.abs(angle) * 0.12;
+    addToe([
+      base,
+      [base[0] + Math.sin(angle) * 0.12, base[1] - 0.10, base[2] + 0.13 * sc],
+      [base[0] + Math.sin(angle) * 0.22, base[1] - 0.20, base[2] + 0.22 * sc],
+      [base[0] + Math.sin(angle) * 0.28, base[1] - 0.28, base[2] + 0.26 * sc],
+    ], 0.022);
   });
+  // Hallux (rear toe)
+  addToe([
+    base,
+    [base[0], base[1] - 0.08, base[2] - 0.14],
+    [base[0], base[1] - 0.13, base[2] - 0.22],
+  ], 0.019);
+
+  g.position.set(side * 0.13, -0.43, 0.10);
+  return g;
 }
-
-// ── Inner toe (toe2) — angled ~25 deg inward ──
-const innerPts   = rotateToeY(midPts, -0.42, 0.88);
-const innerRadii = [0.09, 0.08, 0.07, 0.055, 0.040, 0.022, 0.005];
-createToe(innerPts, innerRadii, talonMat, talonGroup);
-
-// ── Outer toe (toe4) — angled ~25 deg outward ──
-const outerPts = rotateToeY(midPts, +0.42, 0.88);
-createToe(outerPts, innerRadii, talonMat, talonGroup);
-
-// ── Hallux / rear toe (toe1) — backward ──
-const halluxPts = [
-  [ 0.02,  0.06, -0.10],
-  [ 0.01, -0.12, -0.30],
-  [ 0.00, -0.28, -0.44],
-  [-0.01, -0.40, -0.48],
-  [-0.02, -0.50, -0.40],
-  [-0.02, -0.56, -0.28]
-];
-const halluxRadii = [0.09, 0.08, 0.065, 0.048, 0.028, 0.007];
-createToe(halluxPts, halluxRadii, talonMat, talonGroup);
+bodyGroup.add(buildLeg(1));
+bodyGroup.add(buildLeg(-1));
 
 // ─────────────────────────────────────────────
 //  HOLOGRAPHIC RINGS
@@ -852,11 +973,11 @@ function animate() {
   velX += (targetExtraRotX - extraRotX) * spring; velX *= damp; extraRotX += velX;
   velY += (targetExtraRotY - extraRotY) * spring; velY *= damp; extraRotY += velY;
 
-  // Talon float + drag
-  talonGroup.rotation.x = -0.18 + Math.sin(t * 0.35) * 0.04 + extraRotX;
-  talonGroup.rotation.y =  0.25 + Math.sin(t * 0.18) * 0.12 + extraRotY;
-  talonGroup.position.y =  Math.sin(t * 0.72) * 0.09;
-  talonGroup.position.x =  Math.sin(t * 0.44) * 0.04;
+  // Eagle float + drag
+  eagleGroup.rotation.x = -0.08 + Math.sin(t * 0.35) * 0.03 + extraRotX;
+  eagleGroup.rotation.y =  0.15 + Math.sin(t * 0.18) * 0.10 + extraRotY;
+  eagleGroup.position.y =  Math.sin(t * 0.72) * 0.07;
+  eagleGroup.position.x =  Math.sin(t * 0.44) * 0.03;
 
   // Rings rotate
   rings.forEach(ring => {
