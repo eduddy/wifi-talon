@@ -466,7 +466,7 @@ renderer.toneMappingExposure = 1.1;
 
 const scene  = new THREE.Scene();
 scene.background = new THREE.Color(0x000208);
-scene.fog = new THREE.FogExp2(0x000208, 0.06);
+scene.fog = new THREE.FogExp2(0x000208, 0.022);
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
 camera.position.set(0, 0.4, 5.2);
@@ -548,6 +548,11 @@ scene.add(rimLight);
 const fillLight = new THREE.DirectionalLight(0x00ffcc, 0.9);
 fillLight.position.set(0, -3, 2);
 scene.add(fillLight);
+
+// Silver top — illuminates white head/plumage from above
+const topLight = new THREE.DirectionalLight(0xd8eaf2, 1.1);
+topLight.position.set(0, 8, 1);
+scene.add(topLight);
 
 // ─────────────────────────────────────────────
 //  MATERIALS
@@ -800,9 +805,9 @@ const ringMat = new THREE.MeshBasicMaterial({
 
 const rings = [];
 const ringDefs = [
-  { r: 1.4, tube: 0.008, tiltX: 0.3,  tiltZ: 0.1,  speed:  0.18 },
-  { r: 1.9, tube: 0.006, tiltX: -0.5, tiltZ: 0.3,  speed: -0.11 },
-  { r: 2.4, tube: 0.005, tiltX: 0.8,  tiltZ: -0.2, speed:  0.07 },
+  { r: 2.2, tube: 0.007, tiltX: 0.3,  tiltZ: 0.1,  speed:  0.18 },
+  { r: 3.0, tube: 0.005, tiltX: -0.5, tiltZ: 0.3,  speed: -0.11 },
+  { r: 3.8, tube: 0.004, tiltX: 0.8,  tiltZ: -0.2, speed:  0.07 },
 ];
 ringDefs.forEach(d => {
   const mesh = new THREE.Mesh(
